@@ -61,8 +61,8 @@ const SPECIES_BASE_COLORS: Record<(typeof SPECIES_OPTIONS)[number], string> = {
   "Blue Pine": "#7b9fb0",
 };
 
-type ToolTab = "BENCH" | "SAW" | "CROSSCUT" | "GLUE" | "STOCK";
-type SawMode = "RIP" | "CUT";
+type ToolTab = "MATERIAL" | "CUT" | "GLUE";
+type SawMode = "RIP" | "CUT" | "BLOCKS";
 
 function speciesBaseColor(species: string): string {
   const s = species.trim().toLowerCase();
@@ -552,7 +552,7 @@ export default function App() {
   const [showInventoryOnBench, setShowInventoryOnBench] = useState(false);
   const [showScrapOnBench, setShowScrapOnBench] = useState(false);
 
-  const [toolTab, setToolTab] = useState<ToolTab>("SAW");
+  const [toolTab, setToolTab] = useState<ToolTab>("CUT");
   const [sawMode, setSawMode] = useState<SawMode>("RIP");
 
   const [stripWidth, setStripWidth] = useState<number>(1.5);
@@ -1300,9 +1300,9 @@ export default function App() {
   }
 
   function renderToolTabs() {
-    const tabs: ToolTab[] = ["BENCH", "SAW", "CROSSCUT", "GLUE", "STOCK"];
+    const tabs: ToolTab[] = ["MATERIAL", "CUT", "GLUE"];
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
         {tabs.map((tab) => (
           <button
             key={tab}
@@ -1341,259 +1341,7 @@ export default function App() {
     );
   }
 
-  function renderBenchPanel() {
-    return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
-        <div>
-          <div style={sectionTitleStyle}>Rotate on bench</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6 }}>
-            {renderChip("-90", () => rotateMaterialQuarterTurn(selectedUsableIds, -90), false, selectedUsableIds.length === 0)}
-            {renderChip("-45", () => rotateIds(selectedPieceIds, -45), false, selectedPieceIds.length === 0)}
-            {renderChip("Reset", () => resetRotation(selectedPieceIds), false, selectedPieceIds.length === 0)}
-            {renderChip("+45", () => rotateIds(selectedPieceIds, 45), false, selectedPieceIds.length === 0)}
-            {renderChip("+90", () => rotateMaterialQuarterTurn(selectedUsableIds, 90), false, selectedUsableIds.length === 0)}
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Arrangement</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {renderPrimaryButton("Line Up", autoLineUpSelectedRowWrapped, selectedPieceIds.length === 0)}
-            {renderPrimaryButton("Organize Bench", packBench, boardsOnBench.length === 0)}
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Selection tools</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 8 }}>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={dupCount}
-                onChange={(e) => setDupCount(Number(e.target.value))}
-                style={compactInputStyle}
-              />
-              {renderPrimaryButton("Duplicate", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
-            </div>
-
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={dupToInventory} onChange={(e) => setDupToInventory(e.target.checked)} />
-              Send duplicates to inventory
-            </label>
-
-            {renderPrimaryButton("Convert Selected to END", handleFlipSelectedToEnd, selectedUsableIds.length === 0)}
-            {renderPrimaryButton(
-             "Alternate Every Other",
-             alternateEveryOtherSelected,
-             orderedSelectedPieceIds.length < 2
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Routing</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {renderPrimaryButton("To Inventory", sendSelectedToInventory, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Bring to Bench", bringSelectedFromInventoryToBench, selectedPieceIds.length === 0)}
-            {renderPrimaryButton("To Scrap", sendSelectedPiecesToScrap, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Reclaim Scrap", reclaimSelectedScrap, selectedScrapIds.length === 0)}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderSawPanel() {
-    const previewText =
-      sawMode === "RIP"
-        ? ripPreview && ripPreview.ok
-          ? `${ripPreview.value.strips.length} strips + ${formatInches(ripPreview.value.remainder.widthX)} remainder`
-          : ripPreview && !ripPreview.ok
-            ? ripPreview.message
-            : "No active piece"
-        : activeBoard
-          ? `Cut at ${formatInches(safeCutAt)} on ${cutDir === "ALONG_WIDTH" ? "width" : "length"}`
-          : "No active piece";
-
-    return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
-        <div>
-          <div style={sectionTitleStyle}>Operation</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {renderChip("Rip", () => setSawMode("RIP"), sawMode === "RIP")}
-            {renderChip("Cut", () => setSawMode("CUT"), sawMode === "CUT")}
-          </div>
-        </div>
-
-        {sawMode === "RIP" ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontSize: 12 }}>
-              Strip width
-              <input
-                type="number"
-                step={CUT_STEP}
-                value={stripWidth}
-                onChange={(e) => setStripWidth(Number(e.target.value))}
-                style={{ ...compactInputStyle, marginTop: 6 }}
-              />
-            </label>
-
-            <div style={{ fontSize: 12, opacity: 0.82 }}>{previewText}</div>
-
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {ripSuggestions.map((s) =>
-                renderChip(
-                  formatInches(s.stripWidth),
-                  () => setStripWidth(s.stripWidth),
-                  nearlyEqualish(s.stripWidth, safeStripWidth)
-                )
-              )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 6 }}>Direction</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {renderChip("Width", () => setCutDir("ALONG_WIDTH"), cutDir === "ALONG_WIDTH")}
-                {renderChip("Length", () => setCutDir("ALONG_LENGTH"), cutDir === "ALONG_LENGTH")}
-              </div>
-            </div>
-
-            <label style={{ fontSize: 12 }}>
-              Cut distance
-              <input
-                type="number"
-                step={CUT_STEP}
-                value={cutAt}
-                onChange={(e) => setCutAt(Number(e.target.value))}
-                style={{ ...compactInputStyle, marginTop: 6 }}
-              />
-            </label>
-
-            <div>
-              <div style={{ fontSize: 12, marginBottom: 6 }}>Scrap side</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-                {renderChip("None", () => setCutScrapSide("NONE"), cutScrapSide === "NONE")}
-                {renderChip("Left", () => setCutScrapSide("LEFT"), cutScrapSide === "LEFT")}
-                {renderChip("Right", () => setCutScrapSide("RIGHT"), cutScrapSide === "RIGHT")}
-              </div>
-            </div>
-
-            <div style={{ fontSize: 12, opacity: 0.82 }}>{previewText}</div>
-          </div>
-        )}
-
-        <div>
-          <div style={sectionTitleStyle}>Flip active face</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-            {renderChip("FACE", () => handleFlipActive("FLIP_TO_FACE"), false, !activeBoard)}
-            {renderChip("EDGE", () => handleFlipActive("FLIP_TO_EDGE"), false, !activeBoard)}
-            {renderChip("END", () => handleFlipActive("FLIP_TO_END"), false, !activeBoard)}
-            <div>
-          <div style={sectionTitleStyle}>Profile cut</div>
-           {renderPrimaryButton("45° Corner Cut", handleProfileCutCorners45Active, !activeBoard)}
-         </div>
-          </div>
-        </div>
-
-        {renderPrimaryButton(
-          sawMode === "RIP" ? "Rip Board" : "Cut Board",
-          sawMode === "RIP" ? handleRipActive : handleCutActive,
-          !activeBoard
-        )}
-      </div>
-    );
-  }
-  
-  function renderCrosscutPanel() {
-    return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
-        <div>
-          <div style={sectionTitleStyle}>Crosscut blocks</div>
-          <label style={{ fontSize: 12 }}>
-            Block length
-            <input
-              type="number"
-              step={CUT_STEP}
-              value={blockLength}
-              onChange={(e) => setBlockLength(Number(e.target.value))}
-              style={{ ...compactInputStyle, marginTop: 6 }}
-            />
-          </label>
-        </div>
-
-        <div style={{ fontSize: 12, opacity: 0.82 }}>
-          {crosscutPreview && crosscutPreview.ok
-            ? `${crosscutPreview.value.blocks.length} blocks + ${formatInches(crosscutPreview.value.remainder.lengthY)} remainder`
-            : crosscutPreview && !crosscutPreview.ok
-              ? crosscutPreview.message
-              : "No active piece"}
-        </div>
-
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {crosscutSuggestions.map((s) =>
-            renderChip(
-              formatInches(s.blockLength),
-              () => setBlockLength(s.blockLength),
-              nearlyEqualish(s.blockLength, safeBlockLength)
-            )
-          )}
-        </div>
-
-        {renderPrimaryButton("Crosscut Board", handleCrosscutActive, !activeBoard)}
-      </div>
-    );
-  }
-
-  function renderGluePanel() {
-    return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
-        <div>
-          <div style={sectionTitleStyle}>Glue-up</div>
-          <div style={{ fontSize: 12, opacity: 0.82 }}>
-            Selected usable pieces: {orderedSelectedPieceIds.length}
-          </div>
-        </div>
-
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {renderChip("Stacked", () => setGlueOrientation("FACE_GLUED"), glueOrientation === "FACE_GLUED")}
-            {renderChip("Side-by-side", () => setGlueOrientation("EDGE_GLUED"), glueOrientation === "EDGE_GLUED")}
-          </div>
-        </div>
-
-        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-          <input type="checkbox" checked={allowProud} onChange={(e) => setAllowProud(e.target.checked)} />
-          Allow proud glue-up
-        </label>
-
-        <label style={{ fontSize: 12 }}>
-          Result name
-          <input
-            value={resultName}
-            onChange={(e) => setResultName(e.target.value)}
-            placeholder="Optional"
-            style={{ ...compactInputStyle, marginTop: 6 }}
-          />
-        </label>
-
-        <div style={{ fontSize: 12, opacity: 0.82 }}>
-          {gluePreview == null
-            ? "Select at least 2 usable pieces"
-            : gluePreview.ok
-              ? `${formatVisibleFaceLabel(gluePreview.value.panel)}`
-              : gluePreview.message}
-        </div>
-
-        {renderPrimaryButton("Glue Selected", handleGlueUpSelected, orderedSelectedPieceIds.length < 2)}
-      </div>
-    );
-  }
-
-  function renderStockPanel() {
+  function renderMaterialPanel() {
     const recentVariants = variants.slice(0, 4);
 
     return (
@@ -1621,6 +1369,60 @@ export default function App() {
         </div>
 
         <div>
+          <div style={sectionTitleStyle}>Workspace</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {renderPrimaryButton("Line Up", autoLineUpSelectedRowWrapped, selectedPieceIds.length === 0)}
+            {renderPrimaryButton("Organize Bench", packBench, boardsOnBench.length === 0)}
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Visibility</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
+              <input type="checkbox" checked={showInventoryOnBench} onChange={(e) => setShowInventoryOnBench(e.target.checked)} />
+              Show inventory on bench
+            </label>
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
+              <input type="checkbox" checked={showScrapOnBench} onChange={(e) => setShowScrapOnBench(e.target.checked)} />
+              Show scrap on bench
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Selection tools</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 8 }}>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={dupCount}
+                onChange={(e) => setDupCount(Number(e.target.value))}
+                style={compactInputStyle}
+              />
+              {renderPrimaryButton("Duplicate", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
+            </div>
+
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
+              <input type="checkbox" checked={dupToInventory} onChange={(e) => setDupToInventory(e.target.checked)} />
+              Send duplicates to inventory
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Routing</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {renderPrimaryButton("To Inventory", sendSelectedToInventory, selectedUsableIds.length === 0)}
+            {renderPrimaryButton("Bring to Bench", bringSelectedFromInventoryToBench, selectedPieceIds.length === 0)}
+            {renderPrimaryButton("To Scrap", sendSelectedPiecesToScrap, selectedUsableIds.length === 0)}
+            {renderPrimaryButton("Reclaim Scrap", reclaimSelectedScrap, selectedScrapIds.length === 0)}
+          </div>
+        </div>
+
+        <div>
           <div style={sectionTitleStyle}>Apply species to selected</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
             <select value={speciesPick} onChange={(e) => setSpeciesPick(e.target.value)} style={compactInputStyle}>
@@ -1634,20 +1436,6 @@ export default function App() {
             >
               Apply
             </button>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Bench visibility</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showInventoryOnBench} onChange={(e) => setShowInventoryOnBench(e.target.checked)} />
-              Show inventory on bench
-            </label>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showScrapOnBench} onChange={(e) => setShowScrapOnBench(e.target.checked)} />
-              Show scrap on bench
-            </label>
           </div>
         </div>
 
@@ -1701,18 +1489,217 @@ export default function App() {
     );
   }
 
+  function renderCutPanel() {
+    const previewText =
+      sawMode === "RIP"
+        ? ripPreview && ripPreview.ok
+          ? `${ripPreview.value.strips.length} strips + ${formatInches(ripPreview.value.remainder.widthX)} remainder`
+          : ripPreview && !ripPreview.ok
+            ? ripPreview.message
+            : "No active piece"
+        : sawMode === "CUT"
+          ? activeBoard
+            ? `Cut at ${formatInches(safeCutAt)} on ${cutDir === "ALONG_WIDTH" ? "width" : "length"}`
+            : "No active piece"
+          : crosscutPreview && crosscutPreview.ok
+            ? `${crosscutPreview.value.blocks.length} blocks + ${formatInches(crosscutPreview.value.remainder.lengthY)} remainder`
+            : crosscutPreview && !crosscutPreview.ok
+              ? crosscutPreview.message
+              : "No active piece";
+
+    const actionLabel = sawMode === "RIP" ? "Rip Board" : sawMode === "CUT" ? "Cut Board" : "Cut Into Blocks";
+    const actionHandler = sawMode === "RIP" ? handleRipActive : sawMode === "CUT" ? handleCutActive : handleCrosscutActive;
+
+    return (
+      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
+        <div>
+          <div style={sectionTitleStyle}>Cut operation</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+            {renderChip("Rip", () => setSawMode("RIP"), sawMode === "RIP")}
+            {renderChip("Cut", () => setSawMode("CUT"), sawMode === "CUT")}
+            {renderChip("Blocks", () => setSawMode("BLOCKS"), sawMode === "BLOCKS")}
+          </div>
+        </div>
+
+        {sawMode === "RIP" && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ fontSize: 12 }}>
+              Strip width
+              <input
+                type="number"
+                step={CUT_STEP}
+                value={stripWidth}
+                onChange={(e) => setStripWidth(Number(e.target.value))}
+                style={{ ...compactInputStyle, marginTop: 6 }}
+              />
+            </label>
+
+            <div style={{ fontSize: 12, opacity: 0.82 }}>{previewText}</div>
+
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {ripSuggestions.map((s) =>
+                renderChip(
+                  formatInches(s.stripWidth),
+                  () => setStripWidth(s.stripWidth),
+                  nearlyEqualish(s.stripWidth, safeStripWidth)
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {sawMode === "CUT" && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 12, marginBottom: 6 }}>Direction</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {renderChip("Width", () => setCutDir("ALONG_WIDTH"), cutDir === "ALONG_WIDTH")}
+                {renderChip("Length", () => setCutDir("ALONG_LENGTH"), cutDir === "ALONG_LENGTH")}
+              </div>
+            </div>
+
+            <label style={{ fontSize: 12 }}>
+              Cut distance
+              <input
+                type="number"
+                step={CUT_STEP}
+                value={cutAt}
+                onChange={(e) => setCutAt(Number(e.target.value))}
+                style={{ ...compactInputStyle, marginTop: 6 }}
+              />
+            </label>
+
+            <div>
+              <div style={{ fontSize: 12, marginBottom: 6 }}>Scrap side</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                {renderChip("None", () => setCutScrapSide("NONE"), cutScrapSide === "NONE")}
+                {renderChip("Left", () => setCutScrapSide("LEFT"), cutScrapSide === "LEFT")}
+                {renderChip("Right", () => setCutScrapSide("RIGHT"), cutScrapSide === "RIGHT")}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, opacity: 0.82 }}>{previewText}</div>
+          </div>
+        )}
+
+        {sawMode === "BLOCKS" && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ fontSize: 12 }}>
+              Block length
+              <input
+                type="number"
+                step={CUT_STEP}
+                value={blockLength}
+                onChange={(e) => setBlockLength(Number(e.target.value))}
+                style={{ ...compactInputStyle, marginTop: 6 }}
+              />
+            </label>
+
+            <div style={{ fontSize: 12, opacity: 0.82 }}>{previewText}</div>
+
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {crosscutSuggestions.map((s) =>
+                renderChip(
+                  formatInches(s.blockLength),
+                  () => setBlockLength(s.blockLength),
+                  nearlyEqualish(s.blockLength, safeBlockLength)
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        {renderPrimaryButton(actionLabel, actionHandler, !activeBoard)}
+
+        <div>
+          <div style={sectionTitleStyle}>Face / orientation</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            {renderChip("FACE", () => handleFlipActive("FLIP_TO_FACE"), false, !activeBoard)}
+            {renderChip("EDGE", () => handleFlipActive("FLIP_TO_EDGE"), false, !activeBoard)}
+            {renderChip("END", () => handleFlipActive("FLIP_TO_END"), false, !activeBoard)}
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Rotate selected</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6 }}>
+            {renderChip("-90", () => rotateMaterialQuarterTurn(selectedUsableIds, -90), false, selectedUsableIds.length === 0)}
+            {renderChip("-45", () => rotateIds(selectedPieceIds, -45), false, selectedPieceIds.length === 0)}
+            {renderChip("Reset", () => resetRotation(selectedPieceIds), false, selectedPieceIds.length === 0)}
+            {renderChip("+45", () => rotateIds(selectedPieceIds, 45), false, selectedPieceIds.length === 0)}
+            {renderChip("+90", () => rotateMaterialQuarterTurn(selectedUsableIds, 90), false, selectedUsableIds.length === 0)}
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Pattern helpers</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {renderPrimaryButton("Convert Selected to END", handleFlipSelectedToEnd, selectedUsableIds.length === 0)}
+            {renderPrimaryButton("Alternate Every Other", alternateEveryOtherSelected, orderedSelectedPieceIds.length < 2)}
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionTitleStyle}>Profile cut</div>
+          {renderPrimaryButton("45° Corner Cut", handleProfileCutCorners45Active, !activeBoard)}
+        </div>
+      </div>
+    );
+  }
+
+  function renderGluePanel() {
+    return (
+      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
+        <div>
+          <div style={sectionTitleStyle}>Glue-up</div>
+          <div style={{ fontSize: 12, opacity: 0.82 }}>
+            Selected usable pieces: {orderedSelectedPieceIds.length}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {renderChip("Stacked", () => setGlueOrientation("FACE_GLUED"), glueOrientation === "FACE_GLUED")}
+            {renderChip("Side-by-side", () => setGlueOrientation("EDGE_GLUED"), glueOrientation === "EDGE_GLUED")}
+          </div>
+        </div>
+
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
+          <input type="checkbox" checked={allowProud} onChange={(e) => setAllowProud(e.target.checked)} />
+          Allow proud glue-up
+        </label>
+
+        <label style={{ fontSize: 12 }}>
+          Result name
+          <input
+            value={resultName}
+            onChange={(e) => setResultName(e.target.value)}
+            placeholder="Optional"
+            style={{ ...compactInputStyle, marginTop: 6 }}
+          />
+        </label>
+
+        <div style={{ fontSize: 12, opacity: 0.82 }}>
+          {gluePreview == null
+            ? "Select at least 2 usable pieces"
+            : gluePreview.ok
+              ? `${formatVisibleFaceLabel(gluePreview.value.panel)}`
+              : gluePreview.message}
+        </div>
+
+        {renderPrimaryButton("Glue Selected", handleGlueUpSelected, orderedSelectedPieceIds.length < 2)}
+      </div>
+    );
+  }
+
   function renderToolPanel() {
     switch (toolTab) {
-      case "BENCH":
-        return renderBenchPanel();
-      case "SAW":
-        return renderSawPanel();
-      case "CROSSCUT":
-        return renderCrosscutPanel();
+      case "MATERIAL":
+        return renderMaterialPanel();
+      case "CUT":
+        return renderCutPanel();
       case "GLUE":
         return renderGluePanel();
-      case "STOCK":
-        return renderStockPanel();
       default:
         return null;
     }
@@ -1782,7 +1769,7 @@ Internal ID: ${board.id}`}
         <div>
           <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>Virtual Woodshop</div>
           <div style={{ opacity: 0.8, marginTop: 4, fontSize: 13 }}>
-            Bench-centered layout with machine tabs.
+            Pattern sandbox for cutting board glue-ups.
           </div>
         </div>
 
