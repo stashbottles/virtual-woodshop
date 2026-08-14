@@ -320,10 +320,13 @@ function computePieceBoxPx(board: Board3D): { wPx: number; hPx: number } {
   if (isProfileCutPiece(board)) {
     // Cross-section pieces are square by construction (widthX === thicknessZ)
     // — use a symmetric floor so small diamonds/triangles don't get skewed
-    // into a non-square box.
+    // into a non-square box. The floor is higher than ordinary boards' 30px:
+    // these pieces are usually small (fractions of an inch), and the whole
+    // point of viewing them is to see the stripe pattern inside, which is
+    // illegible much below this size.
     return {
-      wPx: Math.max(30, visible.primary * PX_PER_INCH),
-      hPx: Math.max(30, visible.secondary * PX_PER_INCH),
+      wPx: Math.max(72, visible.primary * PX_PER_INCH),
+      hPx: Math.max(72, visible.secondary * PX_PER_INCH),
     };
   }
 
@@ -499,7 +502,11 @@ ${formatSpeciesLabel(board.species)}`}
           inset: 0,
           transform: `rotate(${layout.rotationDeg}deg)`,
           transformOrigin: "center center",
-          borderRadius: isTriangle45 ? 0 : 14,
+          // Corner-cut pieces (diamond center + triangle offcuts) render
+          // sharp corners, not the rounded-rectangle style used for
+          // ordinary boards — rounding a small diamond/triangle box reads
+          // as a circle/blob instead of the actual shape.
+          borderRadius: isProfilePiece ? 0 : 14,
           border: selected
             ? "2px solid rgba(255,255,255,0.85)"
             : board.isOffcut
@@ -612,6 +619,7 @@ export default function App() {
   const [resultName, setResultName] = useState<string>("");
 
   const [speciesPick, setSpeciesPick] = useState<string>("Walnut");
+  const [quickPanelSpecies, setQuickPanelSpecies] = useState<string[]>(["Walnut", "Maple"]);
   const [newLen, setNewLen] = useState(18);
   const [newWid, setNewWid] = useState(6);
   const [newThk, setNewThk] = useState(0.75);
@@ -1410,30 +1418,63 @@ export default function App() {
         {/* Common Actions */}
         <div style={{ marginTop: 20, padding: 12, background: "rgba(34,197,151,0.1)", borderRadius: 12 }}>
         <div style={sectionTitleStyle}>Quick Square Panel</div>
-        
+
         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
-          Creates 4 strips → glues them into a square rod, ready for a 45° Corner Cut
+          3-panel glue-up (outer / middle / outer), ready for a 45° Corner Cut
+        </div>
+
+        <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+          Pick 2 species (outer/middle/outer) or 3 (one per strip):
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+          {SPECIES_OPTIONS.map((s) => {
+            const active = quickPanelSpecies.includes(s);
+            const disabled = !active && quickPanelSpecies.length >= 3;
+            return renderChip(
+              s,
+              () => {
+                setQuickPanelSpecies((prev) =>
+                  prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].slice(0, 3)
+                );
+              },
+              active,
+              disabled
+            );
+          })}
         </div>
 
         <button
           onClick={() => {
-            const species1 = speciesPick;
-            const species2 = speciesPick === "Walnut" ? "Maple" : "Walnut";
+            if (quickPanelSpecies.length < 2) {
+              showStatus("Pick at least 2 species for the square rod.", "error");
+              return;
+            }
+
+            // 2 species picked → outer/middle/outer (classic symmetric look).
+            // 3 species picked → one per strip, in the order picked.
+            const stripSpecies =
+              quickPanelSpecies.length === 3
+                ? quickPanelSpecies
+                : [quickPanelSpecies[0], quickPanelSpecies[1], quickPanelSpecies[0]];
 
             const stripWidth = 1.5;
-            const stripLength = 8;
-            // Stack 4 layers FACE_GLUED so total thickness (4 * stripThickness)
+            const stripLength = 16;
+            // Stack 3 layers FACE_GLUED so total thickness (3 * stripThickness)
             // equals stripWidth — that's what makes the glued result a true
             // square cross-section rod (widthX === thicknessZ), which the
-            // 45° Corner Cut requires.
-            const stripThickness = stripWidth / 4;
+            // 45° Corner Cut requires. 3 strips (not 4) matches the actual
+            // 3-panel glue-up this app is built around.
+            const stripThickness = stripWidth / 3;
 
-            const newPieces: Board3D[] = [
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
-            ];
+            const newPieces: Board3D[] = stripSpecies.map((sp) => ({
+              id: makeId("sq"),
+              lengthY: stripLength,
+              widthX: stripWidth,
+              thicknessZ: stripThickness,
+              grainOrientation: "FACE",
+              species: sp,
+              isOffcut: false,
+            }));
 
             const prev = project;
             const withStrips: Project = { ...project, pieces: [...project.pieces, ...newPieces] };
@@ -1465,11 +1506,11 @@ export default function App() {
           }}
           style={{ ...primaryButtonStyle, background: "rgba(34, 197, 151, 0.4)" }}
         >
-          ✨ Create {speciesPick} + Alternate Square Rod
+          ✨ Glue {quickPanelSpecies.length >= 2 ? quickPanelSpecies.join(" + ") : "Species"} Square Rod
         </button>
 
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-          Result: 1.5" × 1.5" square rod, 8" long (4 stacked strips) — feed it straight into 45° Corner Cut
+          Result: 1.5" × 1.5" square rod, 16" long (3 stacked strips) — feed it straight into 45° Corner Cut
         </div>
       </div>
 
