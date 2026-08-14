@@ -1370,44 +1370,64 @@ export default function App() {
         <div style={sectionTitleStyle}>Quick Square Panel</div>
         
         <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
-          Creates 4 strips → glues into a square panel
+          Creates 4 strips → glues them into a square rod, ready for a 45° Corner Cut
         </div>
 
-        <button 
+        <button
           onClick={() => {
             const species1 = speciesPick;
             const species2 = speciesPick === "Walnut" ? "Maple" : "Walnut";
 
             const stripWidth = 1.5;
             const stripLength = 8;
-            const finalSquareSize = stripWidth * 4; // 6 inches square
+            // Stack 4 layers FACE_GLUED so total thickness (4 * stripThickness)
+            // equals stripWidth — that's what makes the glued result a true
+            // square cross-section rod (widthX === thicknessZ), which the
+            // 45° Corner Cut requires.
+            const stripThickness = stripWidth / 4;
 
             const newPieces: Board3D[] = [
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species1, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species2, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species1, isOffcut: false },
-              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species2, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
             ];
 
-            const nextProject: Project = { ...project, pieces: [...project.pieces, ...newPieces] };
-            applyProject(nextProject);
+            const prev = project;
+            const withStrips: Project = { ...project, pieces: [...project.pieces, ...newPieces] };
+            const stripIds = newPieces.map((p) => p.id);
 
-            const newIds = newPieces.map(p => p.id);
-            const boardsById = new Map([...allBoards, ...newPieces].map(b => [b.id, b] as const));
-            placeIdsWrapped(newIds, boardsById, 200, 150);
+            const glued = performGlueUp(withStrips, {
+              pieceIds: stripIds,
+              orientation: "FACE_GLUED",
+              allowProud: false,
+            });
 
-            setSelectedPieceIds(newIds);
-            setActiveId(newIds[0] || activeId);
+            if (!glued.ok) {
+              alert(`${glued.code}: ${glued.message}`);
+              return;
+            }
 
-            alert(`✅ Created 4 strips.\nGlue them stacked side-by-side.\nFinal square panel ≈ ${finalSquareSize}" x ${finalSquareSize}"`);
+            const next = glued.value;
+            pushUndoSnapshot();
+            applyProject(next);
+
+            const gluedIds = diffNewPieceIds(prev, next);
+            const boardsById = new Map([...next.pieces, ...next.scrap].map((b) => [b.id, b] as const));
+            placeIdsWrapped(gluedIds, boardsById, 200, 150);
+
+            setSelectedPieceIds(gluedIds);
+            if (gluedIds[0]) setActiveId(gluedIds[0]);
+
+            alert(`✅ Glued a ${formatInches(stripWidth)} × ${formatInches(stripWidth)} square rod, ${formatInches(stripLength)} long — ready for 45° Corner Cut.`);
           }}
           style={{ ...primaryButtonStyle, background: "rgba(34, 197, 151, 0.4)" }}
         >
-          ✨ Create {speciesPick} + Alternate Square Panel
+          ✨ Create {speciesPick} + Alternate Square Rod
         </button>
 
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-          Result: ~6" × 6" square panel (4 strips of 1.5" each)
+          Result: 1.5" × 1.5" square rod, 8" long (4 stacked strips) — feed it straight into 45° Corner Cut
         </div>
       </div>
 
