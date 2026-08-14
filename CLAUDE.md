@@ -34,6 +34,14 @@ Verified live end-to-end (not just by reading code): square rod → corner cut �
 **Merge this branch into main whenever you're happy with it.**
 
 
+
+## Also just fixed (commit `c9991c1`, local only — push this before starting new work)
+
+Two more things fixed live in this same session, both already committed to `main` on this machine but not yet pushed to GitHub:
+
+1. **Corner-cut pieces were rendering as small circles, not squares/diamonds.** Root cause: `PieceCard`'s outer box used a fixed 14px border-radius meant for ordinary rectangular boards, and the minimum on-screen size for a cross-section piece was only 30px — a 5/8" triangle offcut at 18px/inch floors to a 30×30px box, and 14px of rounding on a 30px box reads as a circle. Fixed: corner-cut pieces (`profileShape !== "RECTANGLE"`, i.e. `isProfilePiece`) now get `borderRadius: 0`, and their minimum size floor is raised to 72px so the stripe pattern inside is actually legible. Both changes are in `computePieceBoxPx` and `PieceCard` in `src/App.tsx`.
+2. **Quick Square Panel rebuilt to match the real vision.** It was stacking 4 strips with a hardcoded species pair and only 8" long. Now it's a true 3-panel glue-up (outer/middle/outer — the actual technique this app is built around, not an arbitrary 4-layer stack), 16" minimum length, with a species picker: pick 2 species for the classic symmetric outer/middle/outer look, or 3 for one species per strip. Same block in `src/App.tsx`, still calls the existing `performGlueUp`.
+
 ## Next planned feature — Diagonal Bisect + Insert (not yet built)
 
 This is the technique Joshua actually built in the shop and wants the app to simulate next — more central to his vision than it first appeared. He split a square rod along a diagonal (used 20° in his real build, not just 45°), glued a thin contrasting strip (~1/4") into that diagonal seam, and reglued into one larger rod. Crosscut into end-grain blocks and arranged, this produces the X/bowtie accent lines running between diamonds — see the board photo he shared (not in this repo, described here for context: alternating dark/light diamond blocks connected by thin diagonal blue accent lines).
@@ -56,6 +64,20 @@ This is the technique Joshua actually built in the shop and wants the app to sim
 - `src/App.tsx`: new handler mirroring `handleProfileCutCorners45Active` (reuse `showStatus`, `pushUndoSnapshot`, `placeIdsWrapped` — no new `alert()`). Extend `isProfileCutPiece` to also cover `profileShape === "DIAGONAL_INSERT"` so this piece shows its cross-section by default like the diamond does. New inputs: angle number field, insert thickness field (default 0.25), insert species dropdown (reuse existing species list). Place the button as a sibling of 45° Corner Cut.
 
 **Verification**: live via `npm run dev` + Playwright, not just code review — build a square rod, run the cut at a couple of angles (try 0° and 20°, Joshua's real angle), confirm the cross-section visually shows two regions split by a correctly-angled seam with the insert species visible in the gap, then crosscut the result into blocks and confirm each block still renders its seam correctly. `npm run build` clean after each slice. Small commits on a new branch (e.g. `feat/diagonal-bisect-insert`), same discipline as the last round of fixes.
+
+## Next planned feature — Custom Strip Glue-Up Builder (not yet built)
+
+Joshua's own example: "two 1/4" purpleheart strips with a maple 1/2" in-between and 2 walnut 1/2" strips outside the 1/4" strips" — i.e. Walnut(1/2) - Purpleheart(1/4) - Maple(1/2) - Purpleheart(1/4) - Walnut(1/2), 5 strips, fully custom thickness and species per strip, not just the algorithmic outer/middle/outer that Quick Square Panel now builds.
+
+**This needs no new engine code.** `glueUpBoards`/`performGlueUp` (`FACE_GLUED`) already accepts any ordered list of boards and stacks them by thickness — its only real constraint is that every board shares the same `widthX` and `lengthY` (see the `MISMATCHED_LENGTH_FOR_GLUEUP` / width check in `glueUpBoards`, `src/shopEngine.ts`). Joshua's own example already satisfies that (every strip is the same width, only thickness/species vary). So this is a UI feature on top of an existing, already-correct primitive — build a list of strip rows (species + thickness each, shared width + length inputs), turn that list into `Board3D[]`, and call the same `performGlueUp` that Quick Square Panel and the manual GLUE tab already use.
+
+Suggested shape, separate from Quick Square Panel (Joshua explicitly said this doesn't need to live inside that shortcut):
+- A new small panel/tool, e.g. in the MATERIAL tab, with an ordered list of strip rows: species dropdown (reuse `SPECIES_OPTIONS`) + thickness input per row, plus add/remove/reorder controls.
+- One shared width and length input for the whole stack (all strips must match — that's the `FACE_GLUED` constraint above).
+- Show the running total thickness live as rows are added/edited. If Joshua's going to feed the result into 45° Corner Cut, that total needs to equal the width for a square cross-section — surface that (e.g. "total: 1.75\" — need 2.00\" to match width for a square rod") rather than silently letting him build something the Corner Cut will reject with `NON_SQUARE_FACE_FOR_PROFILE_CUT`. Don't hard-block non-square results though — custom glue-ups are useful outside the corner-cut pipeline too.
+- On submit, build the `Board3D[]` strip list (mirroring how Quick Square Panel now builds its `newPieces` array) and call `performGlueUp` with `orientation: "FACE_GLUED"`, same undo/select/place pattern already used everywhere else (`pushUndoSnapshot`, `applyProject`, `diffNewPieceIds`, `placeIdsWrapped`).
+
+**Verification**: live via `npm run dev`, not just code review — build Joshua's actual example (2× 1/4" purpleheart, 1× 1/2" maple, 2× 1/2" walnut, symmetric) and confirm the glued panel's total thickness is exactly 2.00" with the strips in the right order and species. `npm run build` clean. Small commits, same discipline as the rest of this file's history.
 ## Known, deliberately out-of-scope items
 
 - `App.tsx`'s size/monolith structure — not refactored, only touched at the specific points the pipeline fix required.
