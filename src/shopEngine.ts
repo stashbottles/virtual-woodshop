@@ -522,7 +522,22 @@ function sliceBoardPatternAlongAxis(
   return slicePatternAlongAxis(getBoardVisualPattern(board), axis, start, end, patternAxisSpan(board, axis));
 }
 
-function renderDirectionForAxis(axis: PatternAxis): "row" | "column" | undefined {
+// Which physical face App.tsx is currently drawing a piece from.
+// FACE: the normal top-down board view (lengthY = CSS width, widthX = CSS height).
+// CROSS_SECTION: the end-on view of a profile-cut rod (widthX = CSS width,
+// thicknessZ = CSS height) — used for CENTER_SQUARE_45 / TRIANGLE_45 pieces,
+// whose interesting face is their cut cross-section, not their length.
+export type PatternViewMode = "FACE" | "CROSS_SECTION";
+
+function renderDirectionForAxis(axis: PatternAxis, viewMode: PatternViewMode): "row" | "column" | undefined {
+  if (viewMode === "CROSS_SECTION") {
+    // App.tsx renders board.widthX as CSS width and board.thicknessZ as CSS height
+    // for cross-section pieces. LENGTH_Y is depth here and isn't visible.
+    if (axis === "WIDTH_X") return "row";
+    if (axis === "THICKNESS_Z") return "column";
+    return undefined;
+  }
+
   // App.tsx renders board.lengthY as CSS width and board.widthX as CSS height.
   // So LENGTH_Y must split left/right, and WIDTH_X must split top/bottom.
   if (axis === "LENGTH_Y") return "row";
@@ -530,14 +545,14 @@ function renderDirectionForAxis(axis: PatternAxis): "row" | "column" | undefined
   return undefined;
 }
 
-function renderPatternNode(node: VisualPatternNode): RenderPatternNode {
+function renderPatternNode(node: VisualPatternNode, viewMode: PatternViewMode): RenderPatternNode {
   switch (node.kind) {
     case "SOLID":
       return { kind: "leaf", species: normalizePatternSpecies(node.species) };
 
     case "EDGE_GLUED": {
       const axis = node.axis ?? "WIDTH_X";
-      const direction = renderDirectionForAxis(axis);
+      const direction = renderDirectionForAxis(axis, viewMode);
 
       if (direction) {
         return {
@@ -546,17 +561,17 @@ function renderPatternNode(node: VisualPatternNode): RenderPatternNode {
           children: node.bands.map((child) => ({
             size: child.size,
             visualRotationDeg: child.visualRotationDeg,
-            node: renderPatternNode(child.node),
+            node: renderPatternNode(child.node, viewMode),
           })),
         };
       }
 
-      return node.bands.length > 0 ? renderPatternNode(node.bands[0].node) : { kind: "leaf", species: "Wood" };
+      return node.bands.length > 0 ? renderPatternNode(node.bands[0].node, viewMode) : { kind: "leaf", species: "Wood" };
     }
 
     case "FACE_GLUED": {
       const axis = node.axis ?? "THICKNESS_Z";
-      const direction = renderDirectionForAxis(axis);
+      const direction = renderDirectionForAxis(axis, viewMode);
 
       if (direction) {
         return {
@@ -565,18 +580,18 @@ function renderPatternNode(node: VisualPatternNode): RenderPatternNode {
           children: node.layers.map((child) => ({
             size: child.size,
             visualRotationDeg: child.visualRotationDeg,
-            node: renderPatternNode(child.node),
+            node: renderPatternNode(child.node, viewMode),
           })),
         };
       }
 
-      return node.layers.length > 0 ? renderPatternNode(node.layers[0].node) : { kind: "leaf", species: "Wood" };
+      return node.layers.length > 0 ? renderPatternNode(node.layers[0].node, viewMode) : { kind: "leaf", species: "Wood" };
     }
   }
 }
 
-export function getRenderablePattern(board: Board3D): RenderPatternNode {
-  return renderPatternNode(getBoardVisualPattern(board));
+export function getRenderablePattern(board: Board3D, viewMode: PatternViewMode = "FACE"): RenderPatternNode {
+  return renderPatternNode(getBoardVisualPattern(board), viewMode);
 }
 
 function boardWithPattern(board: Board3D, visualPattern: VisualPatternNode): Board3D {

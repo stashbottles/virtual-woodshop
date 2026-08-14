@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Files staged for manual deletion by the user (device bridge cannot delete)
+_to_delete/

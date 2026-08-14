@@ -163,7 +163,14 @@ function formatInches(value: number): string {
   return `${whole} ${reducedNum}/${reducedDen}"`;
 }
 
+function isProfileCutPiece(board: Board3D): boolean {
+  return board.profileShape === "CENTER_SQUARE_45" || board.profileShape === "TRIANGLE_45";
+}
+
 function formatVisibleFaceLabel(board: Board3D): string {
+  if (isProfileCutPiece(board)) {
+    return `${formatInches(board.widthX)} × ${formatInches(board.thicknessZ)} cross-section • ${formatInches(board.lengthY)} long`;
+  }
   return `${formatInches(board.lengthY)} × ${formatInches(board.widthX)} visible • ${formatInches(board.thicknessZ)} deep`;
 }
 
@@ -288,10 +295,48 @@ function getVisibleDims(board: Board3D): {
   secondary: number;
   visibleLabel: string;
 } {
+  if (isProfileCutPiece(board)) {
+    // A corner-cut rod's interesting face is its widthX x thicknessZ
+    // cross-section (equal by construction), not its length.
+    return {
+      primary: board.widthX,
+      secondary: board.thicknessZ,
+      visibleLabel: formatVisibleFaceLabel(board),
+    };
+  }
   return {
     primary: board.lengthY,
     secondary: board.widthX,
     visibleLabel: formatVisibleFaceLabel(board),
+  };
+}
+
+// Shared piece box sizing, used by both PieceCard's render and the
+// auto-placement layout code, so a piece's reserved layout space always
+// matches what it actually renders at.
+function computePieceBoxPx(board: Board3D): { wPx: number; hPx: number } {
+  const visible = getVisibleDims(board);
+
+  if (isProfileCutPiece(board)) {
+    // Cross-section pieces are square by construction (widthX === thicknessZ)
+    // — use a symmetric floor so small diamonds/triangles don't get skewed
+    // into a non-square box.
+    return {
+      wPx: Math.max(30, visible.primary * PX_PER_INCH),
+      hPx: Math.max(30, visible.secondary * PX_PER_INCH),
+    };
+  }
+
+  const workScale = board.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
+  return {
+    wPx:
+      board.grainOrientation === "END"
+        ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
+        : Math.max(30, visible.primary * PX_PER_INCH),
+    hPx:
+      board.grainOrientation === "END"
+        ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
+        : Math.max(18, visible.secondary * PX_PER_INCH),
   };
 }
 
@@ -407,26 +452,17 @@ function PieceCard({
   onPointerDown?: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   const visible = getVisibleDims(board);
-  const workScale = board.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
+  const isCenterSquare45 = board.profileShape === "CENTER_SQUARE_45";
+  const isTriangle45 = board.profileShape === "TRIANGLE_45";
+  const isProfilePiece = isCenterSquare45 || isTriangle45;
 
-  const wPx =
-    board.grainOrientation === "END"
-      ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
-      : Math.max(30, visible.primary * PX_PER_INCH);
+  const { wPx, hPx } = computePieceBoxPx(board);
 
-  const hPx =
-    board.grainOrientation === "END"
-      ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
-      : Math.max(18, visible.secondary * PX_PER_INCH);
-
-  const renderPattern = getRenderablePattern(board);
+  const renderPattern = getRenderablePattern(board, isProfilePiece ? "CROSS_SECTION" : "FACE");
 
   const minSide = Math.min(wPx, hPx);
   const hideInlineLabel = minSide < 22 || wPx < 70 || hPx < 18;
   const useCompactBadge = !hideInlineLabel && (wPx < 170 || hPx < 44 || board.grainOrientation === "END");
-
-  const isCenterSquare45 = board.profileShape === "CENTER_SQUARE_45";
-  const isTriangle45 = board.profileShape === "TRIANGLE_45";
 
   const triangleClipPath =
     board.triangleCorner45 === "TOP_LEFT"
@@ -552,6 +588,16 @@ export default function App() {
   const [showInventoryOnBench, setShowInventoryOnBench] = useState(false);
   const [showScrapOnBench, setShowScrapOnBench] = useState(false);
 
+  // Inline, non-blocking replacement for alert() — used by the corner-cut
+  // and Quick Square Rod flows so a message doesn't freeze the whole page.
+  const [statusMessage, setStatusMessage] = useState<{ text: string; kind: "success" | "error" } | null>(null);
+  function showStatus(text: string, kind: "success" | "error" = "success") {
+    setStatusMessage({ text, kind });
+    window.setTimeout(() => {
+      setStatusMessage((cur) => (cur?.text === text ? null : cur));
+    }, 4000);
+  }
+
   const [toolTab, setToolTab] = useState<ToolTab>("CUT");
   const [sawMode, setSawMode] = useState<SawMode>("RIP");
 
@@ -653,34 +699,36 @@ export default function App() {
 
   const primaryButtonStyle: CSSProperties = {
     width: "100%",
-    padding: "11px 12px",
+    padding: "14px 12px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.28)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.35)",
     color: "#eee",
     cursor: "pointer",
     fontWeight: 700,
+    fontSize: 14,
   };
 
   const compactButtonStyle: CSSProperties = {
-    padding: "7px 10px",
+    padding: "10px 12px",
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.3)",
     color: "#eee",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 700,
   };
 
   const compactInputStyle: CSSProperties = {
     width: "100%",
     boxSizing: "border-box",
-    padding: "9px 10px",
+    padding: "12px 12px",
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.3)",
     color: "#eee",
+    fontSize: 14,
   };
 
   const sectionTitleStyle: CSSProperties = {
@@ -900,16 +948,7 @@ export default function App() {
         const b = boardsById.get(id);
         if (!b) continue;
 
-        const visible = getVisibleDims(b);
-        const workScale = b.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
-        const wPx =
-          b.grainOrientation === "END"
-            ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
-            : Math.max(30, visible.primary * PX_PER_INCH);
-        const hPx =
-          b.grainOrientation === "END"
-            ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
-            : Math.max(18, visible.secondary * PX_PER_INCH);
+        const { wPx, hPx } = computePieceBoxPx(b);
 
         if (x + wPx > maxX) {
           x = leftPad;
@@ -1152,35 +1191,40 @@ export default function App() {
   
     const prev = project;
     const res = performProfileCutCorners45(project, activeBoard.id, KERF);
-    if (!res.ok) return alert(`${res.code}: ${res.message}`);
-  
+    if (!res.ok) {
+      showStatus(`${res.code}: ${res.message}`, "error");
+      return;
+    }
+
     const next = res.value;
-  
+
     pushUndoSnapshot();
     applyProject(next);
-  
+
     const newIds = diffNewPieceIds(prev, next);
     const newBoards = next.pieces.filter((p) => newIds.includes(p.id));
-  
+
     const centerIds = newBoards
       .filter((b) => b.profileShape === "CENTER_SQUARE_45")
       .map((b) => b.id);
-  
+
     const triangleIds = newBoards
       .filter((b) => b.profileShape === "TRIANGLE_45")
       .map((b) => b.id);
-  
+
     setInventoryIds((prevIds) => dedupe([...prevIds, ...triangleIds]));
-  
+
     const boardsById = new Map([...next.pieces, ...next.scrap].map((b) => [b.id, b] as const));
     const anchor = lmap.get(activeBoard.id);
-  
+
     setLayout((prevL) => removeLayouts(prevL, [activeBoard.id]));
-  
+
     placeIdsWrapped(centerIds, boardsById, anchor?.x ?? 60, anchor?.y ?? 140);
-  
+
     setSelectedPieceIds(centerIds);
     if (centerIds[0]) setActiveId(centerIds[0]);
+
+    showStatus(`Cut into 1 center diamond + ${triangleIds.length} triangle offcuts (sent to inventory).`);
   }
 
   function handleGlueUpSelected() {
@@ -1302,20 +1346,20 @@ export default function App() {
   function renderToolTabs() {
     const tabs: ToolTab[] = ["MATERIAL", "CUT", "GLUE"];
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+      <div style={{ display: "flex", gap: 10 }}>
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setToolTab(tab)}
             style={{
-              padding: "8px 6px",
-              borderRadius: 10,
-              border: toolTab === tab ? "1px solid rgba(255,255,255,0.28)" : "1px solid rgba(255,255,255,0.12)",
-              background: toolTab === tab ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.20)",
+              flex: 1,
+              padding: "16px 20px",
+              borderRadius: 12,
+              border: toolTab === tab ? "2px solid #aaa" : "1px solid rgba(255,255,255,0.15)",
+              background: toolTab === tab ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.25)",
               color: "#eee",
-              fontSize: 11,
-              fontWeight: 900,
-              letterSpacing: 0.4,
+              fontSize: 15,
+              fontWeight: 700,
             }}
           >
             {tab}
@@ -1342,147 +1386,100 @@ export default function App() {
   }
 
   function renderMaterialPanel() {
-    const recentVariants = variants.slice(0, 4);
-
     return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
+      <div style={{ ...panelStyle, display: "grid", gap: 16 }}>
+        {/* Add Board - always visible */}
         <div>
-          <div style={sectionTitleStyle}>Add board</div>
+          <div style={sectionTitleStyle}>Add New Board</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <select value={speciesPick} onChange={(e) => setSpeciesPick(e.target.value)} style={compactInputStyle}>
-              {SPECIES_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {SPECIES_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-
             <select value={newGrain} onChange={(e) => setNewGrain(e.target.value as GrainOrientation)} style={compactInputStyle}>
               <option value="FACE">FACE</option>
               <option value="EDGE">EDGE</option>
               <option value="END">END</option>
             </select>
-
             <input type="number" step="0.125" value={newLen} onChange={(e) => setNewLen(Number(e.target.value))} style={compactInputStyle} placeholder="Length" />
             <input type="number" step="0.125" value={newWid} onChange={(e) => setNewWid(Number(e.target.value))} style={compactInputStyle} placeholder="Width" />
             <input type="number" step="0.125" value={newThk} onChange={(e) => setNewThk(Number(e.target.value))} style={compactInputStyle} placeholder="Thickness" />
-            {renderPrimaryButton("Add", addNewBoard)}
+            {renderPrimaryButton("Add Board", addNewBoard)}
           </div>
         </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Workspace</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {renderPrimaryButton("Line Up", autoLineUpSelectedRowWrapped, selectedPieceIds.length === 0)}
-            {renderPrimaryButton("Organize Bench", packBench, boardsOnBench.length === 0)}
-          </div>
+  
+        {/* Common Actions */}
+        <div style={{ marginTop: 20, padding: 12, background: "rgba(34,197,151,0.1)", borderRadius: 12 }}>
+        <div style={sectionTitleStyle}>Quick Square Panel</div>
+        
+        <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+          Creates 4 strips → glues them into a square rod, ready for a 45° Corner Cut
         </div>
 
+        <button
+          onClick={() => {
+            const species1 = speciesPick;
+            const species2 = speciesPick === "Walnut" ? "Maple" : "Walnut";
+
+            const stripWidth = 1.5;
+            const stripLength = 8;
+            // Stack 4 layers FACE_GLUED so total thickness (4 * stripThickness)
+            // equals stripWidth — that's what makes the glued result a true
+            // square cross-section rod (widthX === thicknessZ), which the
+            // 45° Corner Cut requires.
+            const stripThickness = stripWidth / 4;
+
+            const newPieces: Board3D[] = [
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: stripThickness, grainOrientation: "FACE", species: species2, isOffcut: false },
+            ];
+
+            const prev = project;
+            const withStrips: Project = { ...project, pieces: [...project.pieces, ...newPieces] };
+            const stripIds = newPieces.map((p) => p.id);
+
+            const glued = performGlueUp(withStrips, {
+              pieceIds: stripIds,
+              orientation: "FACE_GLUED",
+              allowProud: false,
+            });
+
+            if (!glued.ok) {
+              showStatus(`${glued.code}: ${glued.message}`, "error");
+              return;
+            }
+
+            const next = glued.value;
+            pushUndoSnapshot();
+            applyProject(next);
+
+            const gluedIds = diffNewPieceIds(prev, next);
+            const boardsById = new Map([...next.pieces, ...next.scrap].map((b) => [b.id, b] as const));
+            placeIdsWrapped(gluedIds, boardsById, 200, 150);
+
+            setSelectedPieceIds(gluedIds);
+            if (gluedIds[0]) setActiveId(gluedIds[0]);
+
+            showStatus(`Glued a ${formatInches(stripWidth)} × ${formatInches(stripWidth)} square rod, ${formatInches(stripLength)} long — ready for 45° Corner Cut.`);
+          }}
+          style={{ ...primaryButtonStyle, background: "rgba(34, 197, 151, 0.4)" }}
+        >
+          ✨ Create {speciesPick} + Alternate Square Rod
+        </button>
+
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+          Result: 1.5" × 1.5" square rod, 8" long (4 stacked strips) — feed it straight into 45° Corner Cut
+        </div>
+      </div>
+
+        {/* More Tools - Collapsible later, but for now just one section */}
         <div>
-          <div style={sectionTitleStyle}>Visibility</div>
+          <div style={sectionTitleStyle}>More Tools</div>
           <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showInventoryOnBench} onChange={(e) => setShowInventoryOnBench(e.target.checked)} />
-              Show inventory on bench
-            </label>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showScrapOnBench} onChange={(e) => setShowScrapOnBench(e.target.checked)} />
-              Show scrap on bench
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Selection tools</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 8 }}>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={dupCount}
-                onChange={(e) => setDupCount(Number(e.target.value))}
-                style={compactInputStyle}
-              />
-              {renderPrimaryButton("Duplicate", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
-            </div>
-
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={dupToInventory} onChange={(e) => setDupToInventory(e.target.checked)} />
-              Send duplicates to inventory
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Routing</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {renderPrimaryButton("Duplicate Selected", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
             {renderPrimaryButton("To Inventory", sendSelectedToInventory, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Bring to Bench", bringSelectedFromInventoryToBench, selectedPieceIds.length === 0)}
             {renderPrimaryButton("To Scrap", sendSelectedPiecesToScrap, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Reclaim Scrap", reclaimSelectedScrap, selectedScrapIds.length === 0)}
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Apply species to selected</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-            <select value={speciesPick} onChange={(e) => setSpeciesPick(e.target.value)} style={compactInputStyle}>
-              {SPECIES_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => applySpeciesToIds(selectedUsableIds, speciesPick)}
-              style={{ ...compactButtonStyle, minWidth: 84 }}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Variants</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-              <input
-                value={variantName}
-                onChange={(e) => setVariantName(e.target.value)}
-                placeholder="Variant name"
-                style={compactInputStyle}
-              />
-              <button onClick={handleSaveVariant} style={{ ...compactButtonStyle, minWidth: 70 }}>
-                Save
-              </button>
-            </div>
-
-            {recentVariants.length === 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.72 }}>No saved variants yet.</div>
-            ) : (
-              recentVariants.map((variant) => (
-                <div
-                  key={variant.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto auto",
-                    gap: 6,
-                    alignItems: "center",
-                    padding: 8,
-                    borderRadius: 10,
-                    background: "rgba(0,0,0,0.18)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <div style={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {variant.name}
-                  </div>
-                  <button onClick={() => handleLoadVariant(variant)} style={compactButtonStyle}>
-                    Load
-                  </button>
-                  <button onClick={() => handleDeleteVariant(variant.id)} style={compactButtonStyle}>
-                    ×
-                  </button>
-                </div>
-              ))
-            )}
           </div>
         </div>
       </div>
@@ -1765,6 +1762,29 @@ Internal ID: ${board.id}`}
         background: "#111317",
       }}
     >
+      {statusMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 18,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            padding: "10px 18px",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#111317",
+            background: statusMessage.kind === "error" ? "#f5a3a3" : "#a3e6b8",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            maxWidth: "70vw",
+            textAlign: "center",
+          }}
+        >
+          {statusMessage.text}
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>Virtual Woodshop</div>
