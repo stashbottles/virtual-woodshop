@@ -653,34 +653,36 @@ export default function App() {
 
   const primaryButtonStyle: CSSProperties = {
     width: "100%",
-    padding: "11px 12px",
+    padding: "14px 12px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.28)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.35)",
     color: "#eee",
     cursor: "pointer",
     fontWeight: 700,
+    fontSize: 14,
   };
 
   const compactButtonStyle: CSSProperties = {
-    padding: "7px 10px",
+    padding: "10px 12px",
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.3)",
     color: "#eee",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 700,
   };
 
   const compactInputStyle: CSSProperties = {
     width: "100%",
     boxSizing: "border-box",
-    padding: "9px 10px",
+    padding: "12px 12px",
     borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.14)",
-    background: "rgba(0,0,0,0.22)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    background: "rgba(0,0,0,0.3)",
     color: "#eee",
+    fontSize: 14,
   };
 
   const sectionTitleStyle: CSSProperties = {
@@ -1302,20 +1304,20 @@ export default function App() {
   function renderToolTabs() {
     const tabs: ToolTab[] = ["MATERIAL", "CUT", "GLUE"];
     return (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+      <div style={{ display: "flex", gap: 10 }}>
         {tabs.map((tab) => (
           <button
             key={tab}
             onClick={() => setToolTab(tab)}
             style={{
-              padding: "8px 6px",
-              borderRadius: 10,
-              border: toolTab === tab ? "1px solid rgba(255,255,255,0.28)" : "1px solid rgba(255,255,255,0.12)",
-              background: toolTab === tab ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.20)",
+              flex: 1,
+              padding: "16px 20px",
+              borderRadius: 12,
+              border: toolTab === tab ? "2px solid #aaa" : "1px solid rgba(255,255,255,0.15)",
+              background: toolTab === tab ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.25)",
               color: "#eee",
-              fontSize: 11,
-              fontWeight: 900,
-              letterSpacing: 0.4,
+              fontSize: 15,
+              fontWeight: 700,
             }}
           >
             {tab}
@@ -1342,147 +1344,80 @@ export default function App() {
   }
 
   function renderMaterialPanel() {
-    const recentVariants = variants.slice(0, 4);
-
     return (
-      <div style={{ ...panelStyle, display: "grid", gap: 12 }}>
+      <div style={{ ...panelStyle, display: "grid", gap: 16 }}>
+        {/* Add Board - always visible */}
         <div>
-          <div style={sectionTitleStyle}>Add board</div>
+          <div style={sectionTitleStyle}>Add New Board</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             <select value={speciesPick} onChange={(e) => setSpeciesPick(e.target.value)} style={compactInputStyle}>
-              {SPECIES_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
+              {SPECIES_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-
             <select value={newGrain} onChange={(e) => setNewGrain(e.target.value as GrainOrientation)} style={compactInputStyle}>
               <option value="FACE">FACE</option>
               <option value="EDGE">EDGE</option>
               <option value="END">END</option>
             </select>
-
             <input type="number" step="0.125" value={newLen} onChange={(e) => setNewLen(Number(e.target.value))} style={compactInputStyle} placeholder="Length" />
             <input type="number" step="0.125" value={newWid} onChange={(e) => setNewWid(Number(e.target.value))} style={compactInputStyle} placeholder="Width" />
             <input type="number" step="0.125" value={newThk} onChange={(e) => setNewThk(Number(e.target.value))} style={compactInputStyle} placeholder="Thickness" />
-            {renderPrimaryButton("Add", addNewBoard)}
+            {renderPrimaryButton("Add Board", addNewBoard)}
           </div>
         </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Workspace</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {renderPrimaryButton("Line Up", autoLineUpSelectedRowWrapped, selectedPieceIds.length === 0)}
-            {renderPrimaryButton("Organize Bench", packBench, boardsOnBench.length === 0)}
-          </div>
+  
+        {/* Common Actions */}
+        <div style={{ marginTop: 20, padding: 12, background: "rgba(34,197,151,0.1)", borderRadius: 12 }}>
+        <div style={sectionTitleStyle}>Quick Square Panel</div>
+        
+        <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 8 }}>
+          Creates 4 strips → glues into a square panel
         </div>
 
+        <button 
+          onClick={() => {
+            const species1 = speciesPick;
+            const species2 = speciesPick === "Walnut" ? "Maple" : "Walnut";
+
+            const stripWidth = 1.5;
+            const stripLength = 8;
+            const finalSquareSize = stripWidth * 4; // 6 inches square
+
+            const newPieces: Board3D[] = [
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species2, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species1, isOffcut: false },
+              { id: makeId("sq"), lengthY: stripLength, widthX: stripWidth, thicknessZ: 0.75, grainOrientation: "FACE", species: species2, isOffcut: false },
+            ];
+
+            const nextProject: Project = { ...project, pieces: [...project.pieces, ...newPieces] };
+            applyProject(nextProject);
+
+            const newIds = newPieces.map(p => p.id);
+            const boardsById = new Map([...allBoards, ...newPieces].map(b => [b.id, b] as const));
+            placeIdsWrapped(newIds, boardsById, 200, 150);
+
+            setSelectedPieceIds(newIds);
+            setActiveId(newIds[0] || activeId);
+
+            alert(`✅ Created 4 strips.\nGlue them stacked side-by-side.\nFinal square panel ≈ ${finalSquareSize}" x ${finalSquareSize}"`);
+          }}
+          style={{ ...primaryButtonStyle, background: "rgba(34, 197, 151, 0.4)" }}
+        >
+          ✨ Create {speciesPick} + Alternate Square Panel
+        </button>
+
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+          Result: ~6" × 6" square panel (4 strips of 1.5" each)
+        </div>
+      </div>
+
+        {/* More Tools - Collapsible later, but for now just one section */}
         <div>
-          <div style={sectionTitleStyle}>Visibility</div>
+          <div style={sectionTitleStyle}>More Tools</div>
           <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showInventoryOnBench} onChange={(e) => setShowInventoryOnBench(e.target.checked)} />
-              Show inventory on bench
-            </label>
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={showScrapOnBench} onChange={(e) => setShowScrapOnBench(e.target.checked)} />
-              Show scrap on bench
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Selection tools</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "84px 1fr", gap: 8 }}>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={dupCount}
-                onChange={(e) => setDupCount(Number(e.target.value))}
-                style={compactInputStyle}
-              />
-              {renderPrimaryButton("Duplicate", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
-            </div>
-
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12, opacity: 0.9 }}>
-              <input type="checkbox" checked={dupToInventory} onChange={(e) => setDupToInventory(e.target.checked)} />
-              Send duplicates to inventory
-            </label>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Routing</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {renderPrimaryButton("Duplicate Selected", duplicateSelectionOrActive, !activeBoard && selectedUsableIds.length === 0)}
             {renderPrimaryButton("To Inventory", sendSelectedToInventory, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Bring to Bench", bringSelectedFromInventoryToBench, selectedPieceIds.length === 0)}
             {renderPrimaryButton("To Scrap", sendSelectedPiecesToScrap, selectedUsableIds.length === 0)}
-            {renderPrimaryButton("Reclaim Scrap", reclaimSelectedScrap, selectedScrapIds.length === 0)}
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Apply species to selected</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-            <select value={speciesPick} onChange={(e) => setSpeciesPick(e.target.value)} style={compactInputStyle}>
-              {SPECIES_OPTIONS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <button
-              onClick={() => applySpeciesToIds(selectedUsableIds, speciesPick)}
-              style={{ ...compactButtonStyle, minWidth: 84 }}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <div style={sectionTitleStyle}>Variants</div>
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-              <input
-                value={variantName}
-                onChange={(e) => setVariantName(e.target.value)}
-                placeholder="Variant name"
-                style={compactInputStyle}
-              />
-              <button onClick={handleSaveVariant} style={{ ...compactButtonStyle, minWidth: 70 }}>
-                Save
-              </button>
-            </div>
-
-            {recentVariants.length === 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.72 }}>No saved variants yet.</div>
-            ) : (
-              recentVariants.map((variant) => (
-                <div
-                  key={variant.id}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto auto",
-                    gap: 6,
-                    alignItems: "center",
-                    padding: 8,
-                    borderRadius: 10,
-                    background: "rgba(0,0,0,0.18)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <div style={{ fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {variant.name}
-                  </div>
-                  <button onClick={() => handleLoadVariant(variant)} style={compactButtonStyle}>
-                    Load
-                  </button>
-                  <button onClick={() => handleDeleteVariant(variant.id)} style={compactButtonStyle}>
-                    ×
-                  </button>
-                </div>
-              ))
-            )}
           </div>
         </div>
       </div>

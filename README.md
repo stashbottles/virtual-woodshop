@@ -1,73 +1,93 @@
-# React + TypeScript + Vite
+# Virtual Woodshop
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Virtual Woodshop is a React and TypeScript woodworking pattern simulator for planning cutting-board designs before going into the shop.
 
-Currently, two official plugins are available:
+The app lets users create boards, cut them, flip them, rotate them, glue them, and preserve the visual pattern history through multiple woodworking operations.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Why I Built It
 
-## React Compiler
+Woodworking patterns can become hard to visualize after pieces are ripped, glued, crosscut, flipped to end grain, rotated, and glued again.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+I built this project to experiment with patterns before cutting real material.
 
-## Expanding the ESLint configuration
+The main challenge was making sure the visual pattern does not collapse into a simple species label after multiple transformations.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Features
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Add boards by species, dimensions, and grain orientation
+- Rip boards into strips
+- Cut boards by width or length
+- Crosscut panels into blocks
+- Flip pieces between FACE, EDGE, and END views
+- Rotate selected pieces
+- Glue pieces side-by-side or stacked
+- Preserve visual pattern ancestry through nested glue-ups
+- Convert blocks to END grain
+- Alternate every other selected block
+- Experimental 45-degree corner cut workflow
+- Inventory and scrap handling
+- Undo and redo
+- Save and load design variants
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Tech Stack
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- React
+- TypeScript
+- Vite
+- Custom pattern engine
+- Custom project/workflow logic
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Project Structure
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```text
+src/App.tsx
+src/shopEngine.ts
+src/projectEngine.ts
+src/workflowEngine.ts
+Current Status
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+The app currently uses a simplified workflow:
+
+MATERIAL | CUT | GLUE
+
+The core pattern engine supports common end-grain cutting-board workflows:
+
+rip → glue → crosscut → convert to END → rotate → glue again
+
+The 45-degree corner cut feature is experimental. The center-square pattern behavior works, but triangle cutoff rendering still needs more real-world calibration.
+
+Future Improvements
+Improve triangle cutoff rendering
+Add clearer guided workflows
+Improve inventory organization
+Add exportable build steps
+Refine the user interface
+Add more pattern arrangement tools
+Running Locally
+
+Install dependencies:
+
+npm install
+
+Start the development server:
+
+npm run dev
+
+Build the production version:
+
+npm run build
+
+Preview the production build:
+
+npm run preview
+
+5. Press:
+
+```text
+Command + S
+
+Then commit it:
+
+git add README.md
+git commit -m "Add project README"
+git push
