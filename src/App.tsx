@@ -163,7 +163,14 @@ function formatInches(value: number): string {
   return `${whole} ${reducedNum}/${reducedDen}"`;
 }
 
+function isProfileCutPiece(board: Board3D): boolean {
+  return board.profileShape === "CENTER_SQUARE_45" || board.profileShape === "TRIANGLE_45";
+}
+
 function formatVisibleFaceLabel(board: Board3D): string {
+  if (isProfileCutPiece(board)) {
+    return `${formatInches(board.widthX)} × ${formatInches(board.thicknessZ)} cross-section • ${formatInches(board.lengthY)} long`;
+  }
   return `${formatInches(board.lengthY)} × ${formatInches(board.widthX)} visible • ${formatInches(board.thicknessZ)} deep`;
 }
 
@@ -288,10 +295,48 @@ function getVisibleDims(board: Board3D): {
   secondary: number;
   visibleLabel: string;
 } {
+  if (isProfileCutPiece(board)) {
+    // A corner-cut rod's interesting face is its widthX x thicknessZ
+    // cross-section (equal by construction), not its length.
+    return {
+      primary: board.widthX,
+      secondary: board.thicknessZ,
+      visibleLabel: formatVisibleFaceLabel(board),
+    };
+  }
   return {
     primary: board.lengthY,
     secondary: board.widthX,
     visibleLabel: formatVisibleFaceLabel(board),
+  };
+}
+
+// Shared piece box sizing, used by both PieceCard's render and the
+// auto-placement layout code, so a piece's reserved layout space always
+// matches what it actually renders at.
+function computePieceBoxPx(board: Board3D): { wPx: number; hPx: number } {
+  const visible = getVisibleDims(board);
+
+  if (isProfileCutPiece(board)) {
+    // Cross-section pieces are square by construction (widthX === thicknessZ)
+    // — use a symmetric floor so small diamonds/triangles don't get skewed
+    // into a non-square box.
+    return {
+      wPx: Math.max(30, visible.primary * PX_PER_INCH),
+      hPx: Math.max(30, visible.secondary * PX_PER_INCH),
+    };
+  }
+
+  const workScale = board.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
+  return {
+    wPx:
+      board.grainOrientation === "END"
+        ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
+        : Math.max(30, visible.primary * PX_PER_INCH),
+    hPx:
+      board.grainOrientation === "END"
+        ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
+        : Math.max(18, visible.secondary * PX_PER_INCH),
   };
 }
 
@@ -407,26 +452,17 @@ function PieceCard({
   onPointerDown?: (e: ReactPointerEvent<HTMLDivElement>) => void;
 }) {
   const visible = getVisibleDims(board);
-  const workScale = board.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
+  const isCenterSquare45 = board.profileShape === "CENTER_SQUARE_45";
+  const isTriangle45 = board.profileShape === "TRIANGLE_45";
+  const isProfilePiece = isCenterSquare45 || isTriangle45;
 
-  const wPx =
-    board.grainOrientation === "END"
-      ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
-      : Math.max(30, visible.primary * PX_PER_INCH);
+  const { wPx, hPx } = computePieceBoxPx(board);
 
-  const hPx =
-    board.grainOrientation === "END"
-      ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
-      : Math.max(18, visible.secondary * PX_PER_INCH);
-
-  const renderPattern = getRenderablePattern(board);
+  const renderPattern = getRenderablePattern(board, isProfilePiece ? "CROSS_SECTION" : "FACE");
 
   const minSide = Math.min(wPx, hPx);
   const hideInlineLabel = minSide < 22 || wPx < 70 || hPx < 18;
   const useCompactBadge = !hideInlineLabel && (wPx < 170 || hPx < 44 || board.grainOrientation === "END");
-
-  const isCenterSquare45 = board.profileShape === "CENTER_SQUARE_45";
-  const isTriangle45 = board.profileShape === "TRIANGLE_45";
 
   const triangleClipPath =
     board.triangleCorner45 === "TOP_LEFT"
@@ -551,6 +587,16 @@ export default function App() {
   const [inventoryIds, setInventoryIds] = useState<string[]>([]);
   const [showInventoryOnBench, setShowInventoryOnBench] = useState(false);
   const [showScrapOnBench, setShowScrapOnBench] = useState(false);
+
+  // Inline, non-blocking replacement for alert() — used by the corner-cut
+  // and Quick Square Rod flows so a message doesn't freeze the whole page.
+  const [statusMessage, setStatusMessage] = useState<{ text: string; kind: "success" | "error" } | null>(null);
+  function showStatus(text: string, kind: "success" | "error" = "success") {
+    setStatusMessage({ text, kind });
+    window.setTimeout(() => {
+      setStatusMessage((cur) => (cur?.text === text ? null : cur));
+    }, 4000);
+  }
 
   const [toolTab, setToolTab] = useState<ToolTab>("CUT");
   const [sawMode, setSawMode] = useState<SawMode>("RIP");
@@ -902,16 +948,7 @@ export default function App() {
         const b = boardsById.get(id);
         if (!b) continue;
 
-        const visible = getVisibleDims(b);
-        const workScale = b.grainOrientation === "END" ? END_GRAIN_WORK_SCALE : 1;
-        const wPx =
-          b.grainOrientation === "END"
-            ? Math.max(END_GRAIN_MIN_PREVIEW, visible.primary * PX_PER_INCH * workScale)
-            : Math.max(30, visible.primary * PX_PER_INCH);
-        const hPx =
-          b.grainOrientation === "END"
-            ? Math.max(END_GRAIN_MIN_PREVIEW, visible.secondary * PX_PER_INCH * workScale)
-            : Math.max(18, visible.secondary * PX_PER_INCH);
+        const { wPx, hPx } = computePieceBoxPx(b);
 
         if (x + wPx > maxX) {
           x = leftPad;
@@ -1154,35 +1191,40 @@ export default function App() {
   
     const prev = project;
     const res = performProfileCutCorners45(project, activeBoard.id, KERF);
-    if (!res.ok) return alert(`${res.code}: ${res.message}`);
-  
+    if (!res.ok) {
+      showStatus(`${res.code}: ${res.message}`, "error");
+      return;
+    }
+
     const next = res.value;
-  
+
     pushUndoSnapshot();
     applyProject(next);
-  
+
     const newIds = diffNewPieceIds(prev, next);
     const newBoards = next.pieces.filter((p) => newIds.includes(p.id));
-  
+
     const centerIds = newBoards
       .filter((b) => b.profileShape === "CENTER_SQUARE_45")
       .map((b) => b.id);
-  
+
     const triangleIds = newBoards
       .filter((b) => b.profileShape === "TRIANGLE_45")
       .map((b) => b.id);
-  
+
     setInventoryIds((prevIds) => dedupe([...prevIds, ...triangleIds]));
-  
+
     const boardsById = new Map([...next.pieces, ...next.scrap].map((b) => [b.id, b] as const));
     const anchor = lmap.get(activeBoard.id);
-  
+
     setLayout((prevL) => removeLayouts(prevL, [activeBoard.id]));
-  
+
     placeIdsWrapped(centerIds, boardsById, anchor?.x ?? 60, anchor?.y ?? 140);
-  
+
     setSelectedPieceIds(centerIds);
     if (centerIds[0]) setActiveId(centerIds[0]);
+
+    showStatus(`Cut into 1 center diamond + ${triangleIds.length} triangle offcuts (sent to inventory).`);
   }
 
   function handleGlueUpSelected() {
@@ -1404,7 +1446,7 @@ export default function App() {
             });
 
             if (!glued.ok) {
-              alert(`${glued.code}: ${glued.message}`);
+              showStatus(`${glued.code}: ${glued.message}`, "error");
               return;
             }
 
@@ -1419,7 +1461,7 @@ export default function App() {
             setSelectedPieceIds(gluedIds);
             if (gluedIds[0]) setActiveId(gluedIds[0]);
 
-            alert(`✅ Glued a ${formatInches(stripWidth)} × ${formatInches(stripWidth)} square rod, ${formatInches(stripLength)} long — ready for 45° Corner Cut.`);
+            showStatus(`Glued a ${formatInches(stripWidth)} × ${formatInches(stripWidth)} square rod, ${formatInches(stripLength)} long — ready for 45° Corner Cut.`);
           }}
           style={{ ...primaryButtonStyle, background: "rgba(34, 197, 151, 0.4)" }}
         >
@@ -1720,6 +1762,29 @@ Internal ID: ${board.id}`}
         background: "#111317",
       }}
     >
+      {statusMessage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 18,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            padding: "10px 18px",
+            borderRadius: 12,
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#111317",
+            background: statusMessage.kind === "error" ? "#f5a3a3" : "#a3e6b8",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+            maxWidth: "70vw",
+            textAlign: "center",
+          }}
+        >
+          {statusMessage.text}
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>Virtual Woodshop</div>
